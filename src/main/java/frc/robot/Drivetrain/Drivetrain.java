@@ -5,15 +5,14 @@ import static edu.wpi.first.units.Units.MetersPerSecond;
 
 import java.util.List;
 import java.util.function.Supplier;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
-
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.config.RobotConfig;
 import com.pathplanner.lib.controllers.PPLTVController;
 import com.revrobotics.PersistMode;
 import com.revrobotics.RelativeEncoder;
 import com.revrobotics.ResetMode;
+import com.revrobotics.sim.SparkMaxSim;
+import com.revrobotics.sim.SparkRelativeEncoderSim;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.SparkBase.ControlType;
@@ -29,10 +28,17 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.DifferentialDriveWheelPositions;
 import edu.wpi.first.math.kinematics.DifferentialDriveWheelSpeeds;
+import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.units.measure.LinearVelocity;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.RobotBase;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim;
+import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim.KitbotGearing;
+import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim.KitbotMotor;
+import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim.KitbotWheelSize;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Subsystem;
 import frc.robot.Drivetrain.Constants.LeftWheels;
@@ -60,6 +66,10 @@ public class Drivetrain implements Subsystem{
     public AHRS gyro; //using the NavX gyroscope, putting it on the RoboRIO MXP port
     public DifferentialDrivePoseEstimator PoseEstimator;
     private static Drivetrain inst;
+
+    private List<SparkMaxSim> SimMotors;
+    private List<SparkRelativeEncoderSim> SimEncoders;
+    private DifferentialDrivetrainSim SimSystem;
     
     private SparkMaxConfig FrontLeftConfig, FrontRightConfig, BackLeftConfig, BackRightConfig;
 
@@ -115,6 +125,7 @@ public class Drivetrain implements Subsystem{
         motors.get(3).configure(BackRightConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
         
         autoInit();
+        if(RobotBase.isSimulation()) simInit();
     }
 
     public DifferentialDriveWheelPositions getPosition(){
@@ -139,18 +150,45 @@ public class Drivetrain implements Subsystem{
         return run(() -> {
             DifferentialDriveWheelSpeeds targetSpeeds = Constants.kinematics.toWheelSpeeds(ChassisSpeeds.discretize(speeds, 0.01));
             targetSpeeds.desaturate(Constants.MaxVelocity);
-            LeftPID.setSetpoint(targetSpeeds.leftMetersPerSecond, ControlType.kMAXMotionVelocityControl);
-            RightPID.setSetpoint(targetSpeeds.rightMetersPerSecond, ControlType.kMAXMotionVelocityControl);
+
+            if(RobotBase.isReal()){
+                LeftPID.setSetpoint(targetSpeeds.leftMetersPerSecond, ControlType.kMAXMotionVelocityControl);
+                RightPID.setSetpoint(targetSpeeds.rightMetersPerSecond, ControlType.kMAXMotionVelocityControl);
+            }else{
+                SimMotors.get(0).setAppliedOutput(targetSpeeds.leftMetersPerSecond/Constants.MaxVelocity.in(MetersPerSecond));
+                SimMotors.get(2).setAppliedOutput(targetSpeeds.rightMetersPerSecond/Constants.MaxVelocity.in(MetersPerSecond));
+            }
         });
     }
+
+    public void resetPose(Pose2d pose){
+            PoseEstimator.resetPose(pose);
+        }
+
 
     @Override
     public void periodic(){
         PoseEstimator.update(gyro.getRotation2d(), getPosition());
     }
 
-    public void resetPose(Pose2d pose){
-        PoseEstimator.resetPose(pose);
+    private void simInit(){
+        SimMotors = motors.stream().map(m -> new SparkMaxSim(m, DCMotor.getNEO(1))).toList();
+        SimEncoders = SimMotors.stream().map(SparkMaxSim::getRelativeEncoderSim).toList();
+        SimSystem = DifferentialDrivetrainSim.createKitbotSim(
+            KitbotMotor.kDoubleNEOPerSide, 
+            KitbotGearing.k10p71, 
+            KitbotWheelSize.kSixInch, 
+            null);
+    }
+
+    @Override
+    public void simulationPeriodic(){
+        SimSystem.setInputs(motors.get(0).get()*RobotController.getBatteryVoltage(), 
+                            motors.get(2).get()*RobotController.getBatteryVoltage());
+        SimSystem.update(0.02);
+        SimEncoders.get(0).setPosition(SimSystem.getLeftPositionMeters()/Constants.WheelRadius.times(2*Math.PI).in(Meters));
+        SimEncoders.get(2).setPosition(SimSystem.getRightPositionMeters()/Constants.WheelRadius.times(2*Math.PI).in(Meters));
+        gyro.setAngleAdjustment(-SimSystem.getHeading().getDegrees());
     }
 
     private void autoInit(){

@@ -4,8 +4,6 @@
 
 package frc.robot;
 
-import java.util.List;
-
 import com.revrobotics.PersistMode;
 import com.revrobotics.ResetMode;
 import com.revrobotics.spark.SparkMax;
