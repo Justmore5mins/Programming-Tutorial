@@ -19,12 +19,20 @@ import edu.wpi.first.units.measure.LinearVelocity;
 
 public class Constants {
     public static final double GearRatio = 10.71;
+    
     public static final Distance TrackWidth = Inches.of(21.918500);
     public static final Distance WheelRadius = Inches.of(3);
+
+    public static final double PositionConversionFactor = 1 / GearRatio;
+    public static final double VelocityConversionFactor = PositionConversionFactor / 60;
+    
     public static final DifferentialDriveKinematics kinematics = new DifferentialDriveKinematics(TrackWidth);
 
     public static final LinearVelocity MaxVelocity = MetersPerSecond.of(RPM.of(5676).div(GearRatio).in(RotationsPerSecond)*WheelRadius.times(2*Math.PI).in(Meters));
     public static final AngularVelocity MaxOmega = RadiansPerSecond.of(MaxVelocity.in(MetersPerSecond)/TrackWidth.div(2).in(Meters));
+
+    public static final double SimMass = 28.0;
+    public static final double SimMOI  = 1.3;
 
     public class LeftWheels {
         public static final int FrontMotor = 10;

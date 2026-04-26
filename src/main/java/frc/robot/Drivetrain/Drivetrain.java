@@ -2,6 +2,7 @@ package frc.robot.Drivetrain;
 
 import static edu.wpi.first.units.Units.Meters;
 import static edu.wpi.first.units.Units.MetersPerSecond;
+import static edu.wpi.first.units.Units.RadiansPerSecond;
 
 import java.util.List;
 import java.util.function.Supplier;
@@ -14,6 +15,8 @@ import com.pathplanner.lib.controllers.PPLTVController;
 import com.revrobotics.PersistMode;
 import com.revrobotics.RelativeEncoder;
 import com.revrobotics.ResetMode;
+import com.revrobotics.sim.SparkMaxSim;
+import com.revrobotics.sim.SparkRelativeEncoderSim;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.SparkBase.ControlType;
@@ -29,10 +32,16 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.DifferentialDriveWheelPositions;
 import edu.wpi.first.math.kinematics.DifferentialDriveWheelSpeeds;
+import edu.wpi.first.math.system.plant.DCMotor;
+import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.networktables.StructPublisher;
 import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.units.measure.LinearVelocity;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.RobotBase;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Subsystem;
 import frc.robot.Drivetrain.Constants.LeftWheels;
@@ -55,13 +64,21 @@ public class Drivetrain implements Subsystem{
      * public SparkMax FrontLeftMotor, FrontRightMotor, RearLeftMotor, RearRightMotor, but the List iterator can make the program more concisely and readable
      */
     public List<SparkMax> motors;
+    public SparkMaxSim leftSimMotor, rightSimMotor;
+    
     public List<RelativeEncoder> encoders;
+    public SparkRelativeEncoderSim leftEncoderSim, rightEncoderSim;
+
     public SparkClosedLoopController LeftPID, RightPID;
     public AHRS gyro; //using the NavX gyroscope, putting it on the RoboRIO MXP port
     public DifferentialDrivePoseEstimator PoseEstimator;
     private static Drivetrain inst;
     
     private SparkMaxConfig FrontLeftConfig, FrontRightConfig, BackLeftConfig, BackRightConfig;
+
+    private DifferentialDrivetrainSim driveSim;
+
+    private final StructPublisher<Pose2d> publisherField;
 
     private Drivetrain(){
         //initialize the variables we just defined
@@ -73,6 +90,7 @@ public class Drivetrain implements Subsystem{
             new SparkMax(RightWheels.RearMotor, MotorType.kBrushless)
         );
         encoders = motors.stream().map(SparkMax::getEncoder).toList();
+
         LeftPID = motors.get(0).getClosedLoopController();
         RightPID = motors.get(2).getClosedLoopController();
 
@@ -92,8 +110,8 @@ public class Drivetrain implements Subsystem{
             .smartCurrentLimit(40);
         FrontLeftConfig.closedLoop.apply(LeftWheels.PID).apply(LeftWheels.FF).apply(LeftWheels.Motion); //applying the clsed loop control configuration
         FrontLeftConfig.encoder
-            .positionConversionFactor(1/Constants.GearRatio) //Convert to mechanism rotations
-            .velocityConversionFactor(1/Constants.GearRatio/60); //Convert to mechanism rot/s
+            .positionConversionFactor(Constants.PositionConversionFactor) //Convert to mechanism rotations
+            .velocityConversionFactor(Constants.VelocityConversionFactor); //Convert to mechanism rot/s
         BackLeftConfig
             .follow(LeftWheels.FrontMotor);
 
@@ -115,6 +133,10 @@ public class Drivetrain implements Subsystem{
         motors.get(3).configure(BackRightConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
         
         autoInit();
+
+        if(RobotBase.isSimulation()) simInit();
+
+        publisherField = NetworkTableInstance.getDefault().getStructTopic("Field", Pose2d.struct).publish();
     }
 
     public DifferentialDriveWheelPositions getPosition(){
@@ -136,17 +158,52 @@ public class Drivetrain implements Subsystem{
     }
 
     public Command drive(ChassisSpeeds speeds){
-        return run(() -> {
-            DifferentialDriveWheelSpeeds targetSpeeds = Constants.kinematics.toWheelSpeeds(ChassisSpeeds.discretize(speeds, 0.01));
-            targetSpeeds.desaturate(Constants.MaxVelocity);
-            LeftPID.setSetpoint(targetSpeeds.leftMetersPerSecond, ControlType.kMAXMotionVelocityControl);
-            RightPID.setSetpoint(targetSpeeds.rightMetersPerSecond, ControlType.kMAXMotionVelocityControl);
-        });
+        DifferentialDriveWheelSpeeds targetSpeeds = Constants.kinematics.toWheelSpeeds(ChassisSpeeds.discretize(speeds, 0.01));
+
+        if(RobotBase.isReal()) {
+            return run(
+                () -> {
+                    targetSpeeds.desaturate(Constants.MaxVelocity);
+                    LeftPID.setSetpoint(targetSpeeds.leftMetersPerSecond, ControlType.kMAXMotionVelocityControl);
+                    RightPID.setSetpoint(targetSpeeds.rightMetersPerSecond, ControlType.kMAXMotionVelocityControl);
+                }
+            );
+        }
+        else {
+            return run(
+                () -> {
+                    double leftSpeed = targetSpeeds.leftMetersPerSecond / Constants.MaxVelocity.in(MetersPerSecond);
+                    double rightSpeed = targetSpeeds.leftMetersPerSecond / Constants.MaxVelocity.in(MetersPerSecond);
+
+                    leftSimMotor.setAppliedOutput(leftSpeed);
+                    rightSimMotor.setAppliedOutput(rightSpeed);
+                }
+            );
+        }
     }
 
     @Override
     public void periodic(){
         PoseEstimator.update(gyro.getRotation2d(), getPosition());
+        publisherField.set(PoseEstimator.getEstimatedPosition());
+    }
+
+    @Override
+    public void simulationPeriodic() {
+        driveSim.setInputs(
+            leftSimMotor.getAppliedOutput() * RobotController.getBatteryVoltage(),
+            rightSimMotor.getAppliedOutput() * RobotController.getBatteryVoltage()
+        );
+
+        driveSim.update(0.02);
+
+        leftEncoderSim.setPosition(driveSim.getLeftPositionMeters());
+        rightEncoderSim.setPosition(driveSim.getRightPositionMeters());
+
+        leftEncoderSim.setVelocity(driveSim.getLeftVelocityMetersPerSecond());
+        rightEncoderSim.setVelocity(driveSim.getRightVelocityMetersPerSecond());
+
+        gyro.setAngleAdjustment(driveSim.getHeading().getDegrees());
     }
 
     public void resetPose(Pose2d pose){
@@ -161,14 +218,37 @@ public class Drivetrain implements Subsystem{
             () -> Constants.kinematics.toChassisSpeeds(getSpeeds()), 
             (speeds, ff) -> drive(speeds), 
             new PPLTVController(
-                VecBuilder.fill(0,0,0), 
-                VecBuilder.fill(0,0), 0.02), 
+                VecBuilder.fill(1.0,1.0,1.0), 
+                VecBuilder.fill(1.0,1.0),
+                0.02
+            ), 
             RobotConfig.fromGUISettings(), 
             () -> DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Red, 
             this); 
        }catch(Exception e){
         DriverStation.reportError(e.getMessage(), e.getStackTrace());
        }
+    }
+
+    private void simInit() {
+        driveSim = new DifferentialDrivetrainSim(
+            DCMotor.getNEO(2),
+            Constants.GearRatio,
+            Constants.SimMOI,
+            Constants.SimMass,
+            Constants.WheelRadius.in(Meters) / Math.PI / 2,
+            Constants.kinematics.trackWidthMeters,
+            null
+        );
+
+        leftSimMotor = new SparkMaxSim(motors.get(0), DCMotor.getNEO(2));
+        rightSimMotor = new SparkMaxSim(motors.get(2), DCMotor.getNEO(2));
+
+        leftEncoderSim = leftSimMotor.getRelativeEncoderSim();
+        rightEncoderSim = rightSimMotor.getRelativeEncoderSim();
+
+        leftSimMotor.useDriverStationEnable();
+        rightSimMotor.useDriverStationEnable();
     }
 
     public static Drivetrain getInstance(){
