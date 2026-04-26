@@ -2,9 +2,12 @@
 # If you remove items from this file, intellisense might break.
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 .vscode
 .wpilib
 
+=======
+>>>>>>> b9344713ad5864505c31ee38120030a85bb11aa9
 =======
 >>>>>>> b9344713ad5864505c31ee38120030a85bb11aa9
 ### C++ ###
