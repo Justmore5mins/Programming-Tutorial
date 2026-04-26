@@ -4,12 +4,13 @@
 
 package frc.robot;
 
+import dev.doglog.DogLog;
+import dev.doglog.DogLogOptions;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.Drivetrain.Drivetrain;
 import frc.robot.Drivetrain.Constants;
-import frc.robot.Drivetrain.DataLog;
 
 public class RobotContainer {
   public Drivetrain drivetrain = Drivetrain.getInstance();
@@ -17,12 +18,24 @@ public class RobotContainer {
   
 
   public RobotContainer() {
-    new DataLog();
     drivetrain.setDefaultCommand(drivetrain.drive(
       () -> Constants.MaxVelocity.times(controller.getLeftX()),
       () -> Constants.MaxVelocity.times(controller.getLeftY()),
       () -> Constants.MaxOmega.times(controller.getRightX())
     ));
+
+    DogLog.setOptions(new DogLogOptions()
+      .withNtPublish(true)
+      .withCaptureNt(true)
+      .withLogExtras(true)
+      .withLogExtras(true)
+      .withCaptureDs(true));
+
+    DogLog.setPdh(drivetrain.PDP);
+
+    DogLog.setEnabled(true);
+
+
     configureBindings();
   }
 

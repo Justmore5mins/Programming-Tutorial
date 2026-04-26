@@ -21,6 +21,7 @@ import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.studica.frc.AHRS;
 import com.studica.frc.AHRS.NavXComType;
 
+import dev.doglog.DogLog;
 import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.estimator.DifferentialDrivePoseEstimator;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -31,9 +32,11 @@ import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.units.measure.LinearVelocity;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.PowerDistribution;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.PowerDistribution.ModuleType;
 import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Subsystem;
@@ -66,7 +69,9 @@ public class Drivetrain implements Subsystem{
     public AHRS gyro; //using the NavX gyroscope, putting it on the RoboRIO MXP port
     public DifferentialDrivePoseEstimator PoseEstimator;
     private static Drivetrain inst;
-    
+
+    public PowerDistribution PDP;
+
     private SparkMaxConfig FrontLeftConfig, FrontRightConfig, BackLeftConfig, BackRightConfig;
 
     private DifferentialDrivetrainSim driveSim;
@@ -88,6 +93,7 @@ public class Drivetrain implements Subsystem{
         gyro = new AHRS(NavXComType.kMXP_SPI);
         PoseEstimator = new DifferentialDrivePoseEstimator(Constants.kinematics, gyro.getRotation2d(), getPosition().leftMeters, getPosition().rightMeters, new Pose2d());
 
+        PDP = new PowerDistribution(50, ModuleType.kCTRE);
 
         FrontLeftConfig = new SparkMaxConfig();
         FrontRightConfig = new SparkMaxConfig();
@@ -178,6 +184,15 @@ public class Drivetrain implements Subsystem{
     @Override
     public void periodic(){
         PoseEstimator.update(gyro.getRotation2d(), getPosition());
+        log();
+    }
+
+    private void log(){
+        DogLog.log("Drivetrain/CurrentPose", PoseEstimator.getEstimatedPosition());
+        DogLog.log("Drivetrain/CurrentSpeeds", Constants.kinematics.toChassisSpeeds(getSpeeds()));
+        DogLog.log("Drivetrain/WheelSpeeds", getSpeeds());
+        DogLog.log("Drivetrain/CurrentWheelSpeeds", getSpeeds());
+        DogLog.log("Drivetrain/WheelPosition", getPosition());
     }
 
     @Override
