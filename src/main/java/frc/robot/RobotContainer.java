@@ -16,7 +16,7 @@ public class RobotContainer {
 
   public RobotContainer() {
     drivetrain.setDefaultCommand(drivetrain.drive(
-      () -> Constants.MaxVelocity.times(0.5),
+      () -> Constants.MaxVelocity.times(controller.getLeftX()),
       () -> Constants.MaxVelocity.times(controller.getLeftY()),
       () -> Constants.MaxOmega.times(controller.getRightX())
     ));
