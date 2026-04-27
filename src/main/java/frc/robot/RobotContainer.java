@@ -15,7 +15,6 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.Drivetrain.Drivetrain;
 import frc.robot.Drivetrain.Constants;
-import frc.robot.Drivetrain.DataLog;
 
 public class RobotContainer {
   public Drivetrain drivetrain = Drivetrain.getInstance();
@@ -24,10 +23,17 @@ public class RobotContainer {
   private SendableChooser<Command> autoChooser;
 
   public RobotContainer() {
-    new DataLog();
 
     autoChooser = AutoBuilder.buildAutoChooser();
     SmartDashboard.putData("Auto Chooser", autoChooser);
+
+    DogLog.setOptions(new DogLogOptions()
+      .withCaptureConsole(true)
+      .withCaptureDs(true)
+      .withNtPublish(true)
+      .withCaptureNt(true)
+      .withLogExtras(true));
+    DogLog.setPdh(drivetrain.PDP);
 
     drivetrain.setDefaultCommand(
       drivetrain.drive(
