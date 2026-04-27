@@ -5,6 +5,9 @@ import static edu.wpi.first.units.Units.MetersPerSecond;
 
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.config.RobotConfig;
 import com.pathplanner.lib.controllers.PPLTVController;
@@ -51,20 +54,11 @@ import frc.robot.Drivetrain.Constants.RightWheels;
 
 
 public class Drivetrain implements Subsystem {
-
-    /**
-     * defines the motors and other essential parts
-     */
-
-    /**
-     * This expression equals to
-     * public SparkMax FrontLeftMotor, FrontRightMotor, RearLeftMotor, RearRightMotor, but the List iterator can make the program more concisely and readable
-     */
     public List<SparkMax> motors;
     public SparkMaxSim leftSimMotor, rightSimMotor;
     
     public List<RelativeEncoder> encoders;
-    public SparkRelativeEncoderSim leftSimEncoder, rightSimEncoder;
+    public SparkRelativeEncoderSim LeftEncoderSim, RightEncoderSim;
 
     public SparkClosedLoopController LeftPID, RightPID;
     public AHRS gyro; //using the NavX gyroscope, putting it on the RoboRIO MXP port
@@ -125,11 +119,9 @@ public class Drivetrain implements Subsystem {
         BackRightConfig
             .follow(RightWheels.FrontMotor);
 
-        motors.get(0).configure(FrontLeftConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
-        motors.get(1).configure(BackLeftConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
-        motors.get(2).configure(FrontRightConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
-        motors.get(3).configure(BackRightConfig, ResetMode.kResetSafeParameters, PersistMode.kPersistParameters);
-        
+        List<SparkMaxConfig> cfg = List.of(FrontLeftConfig, BackLeftConfig, FrontRightConfig, BackRightConfig);
+        IntStream.range(0, 4).forEach(i -> motors.get(i).configure(cfg.get(i), ResetMode.kResetSafeParameters, PersistMode.kPersistParameters));
+
         if(RobotBase.isSimulation()) simInit();
 
         PoseEstimator = new DifferentialDrivePoseEstimator(Constants.kinematics, gyro.getRotation2d(), getPosition().leftMeters, getPosition().rightMeters, new Pose2d());
@@ -138,33 +130,29 @@ public class Drivetrain implements Subsystem {
     }
 
     public DifferentialDriveWheelPositions getPosition(){
-        if(RobotBase.isReal()) {
-            return new DifferentialDriveWheelPositions(
-                Meters.of(encoders.get(0).getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters)),
-                Meters.of(encoders.get(2).getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
-            );
-        }
-        else {
-            return new DifferentialDriveWheelPositions(
-                Meters.of(leftSimEncoder.getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters)),
-                Meters.of(rightSimEncoder.getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
-            );
-        }
+        // if(RobotBase.isReal()) {
+        //     return new DifferentialDriveWheelPositions(
+        //         Meters.of(encoders.get(0).getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters)),
+        //         Meters.of(encoders.get(2).getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
+        //     );
+        // }
+        // else {
+        //     return new DifferentialDriveWheelPositions(
+        //         Meters.of(leftSimEncoder.getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters)),
+        //         Meters.of(rightSimEncoder.getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
+        //     );
+        // }
+        return new DifferentialDriveWheelPositions(
+            Meters.of((RobotBase.isReal() ? encoders.get(0).getPosition() : LeftEncoderSim.getPosition()) * Constants.WheelRadius.times(2 * Math.PI).in(Meters)), 
+            Meters.of((RobotBase.isReal() ? encoders.get(2).getPosition() : RightEncoderSim.getPosition()) * Constants.WheelRadius.times(2 * Math.PI).in(Meters)));
     }
 
     public DifferentialDriveWheelSpeeds getSpeeds(){
-        if(RobotBase.isReal()) {
-            return new DifferentialDriveWheelSpeeds(
-                MetersPerSecond.of(encoders.get(0).getVelocity() * Constants.WheelRadius.times(2 * Math.PI).in(Meters)),
-                MetersPerSecond.of(encoders.get(2).getVelocity() * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
-            );
-        }
-        else {
-            return new DifferentialDriveWheelSpeeds(
-                MetersPerSecond.of(leftSimEncoder.getVelocity() * Constants.WheelRadius.times(2 * Math.PI).in(Meters)),
-                MetersPerSecond.of(rightSimEncoder.getVelocity() * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
-            );
-        }
+        return new DifferentialDriveWheelSpeeds(
+            MetersPerSecond.of((RobotBase.isReal() ? encoders.get(0).getVelocity() : LeftEncoderSim.getVelocity()) * Constants.WheelCircumference.in(Meters)),
+            MetersPerSecond.of((RobotBase.isReal() ? encoders.get(2).getVelocity() : RightEncoderSim.getVelocity()) * Constants.WheelCircumference.in(Meters))
+        );
+
     }
 
     public Pose2d getCurrentPose() {
@@ -196,7 +184,7 @@ public class Drivetrain implements Subsystem {
 
     public void resetPose(Pose2d pose){
             PoseEstimator.resetPose(pose);
-        }
+    }
 
 
     @Override
@@ -222,11 +210,11 @@ public class Drivetrain implements Subsystem {
 
         driveSim.update(0.02);
 
-        leftSimEncoder.setPosition(driveSim.getLeftPositionMeters());
-        rightSimEncoder.setPosition(driveSim.getRightPositionMeters());
+        LeftEncoderSim.setPosition(driveSim.getLeftPositionMeters());
+        RightEncoderSim.setPosition(driveSim.getRightPositionMeters());
 
-        leftSimEncoder.setVelocity(driveSim.getLeftVelocityMetersPerSecond());
-        rightSimEncoder.setVelocity(driveSim.getRightVelocityMetersPerSecond());
+        LeftEncoderSim.setVelocity(driveSim.getLeftVelocityMetersPerSecond());
+        RightEncoderSim.setVelocity(driveSim.getRightVelocityMetersPerSecond());
 
         gyro.setAngleAdjustment(-driveSim.getHeading().getDegrees());
     }
@@ -265,8 +253,8 @@ public class Drivetrain implements Subsystem {
         leftSimMotor = new SparkMaxSim(motors.get(0), DCMotor.getNEO(2));
         rightSimMotor = new SparkMaxSim(motors.get(2), DCMotor.getNEO(2));
 
-        leftSimEncoder = leftSimMotor.getRelativeEncoderSim();
-        rightSimEncoder = rightSimMotor.getRelativeEncoderSim();
+        LeftEncoderSim = leftSimMotor.getRelativeEncoderSim();
+        RightEncoderSim = rightSimMotor.getRelativeEncoderSim();
 
         leftSimMotor.useDriverStationEnable();
         rightSimMotor.useDriverStationEnable();
