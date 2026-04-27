@@ -4,44 +4,50 @@
 
 package frc.robot;
 
+import com.pathplanner.lib.auto.AutoBuilder;
+
 import dev.doglog.DogLog;
 import dev.doglog.DogLogOptions;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import frc.robot.Drivetrain.Drivetrain;
 import frc.robot.Drivetrain.Constants;
+import frc.robot.Drivetrain.DataLog;
 
 public class RobotContainer {
   public Drivetrain drivetrain = Drivetrain.getInstance();
   public CommandXboxController controller = new CommandXboxController(0);
   
+  private SendableChooser<Command> autoChooser;
 
   public RobotContainer() {
-    drivetrain.setDefaultCommand(drivetrain.drive(
-      () -> Constants.MaxVelocity.times(controller.getLeftX()),
-      () -> Constants.MaxVelocity.times(controller.getLeftY()),
-      () -> Constants.MaxOmega.times(controller.getRightX())
-    ));
+    new DataLog();
 
-    DogLog.setOptions(new DogLogOptions()
-      .withNtPublish(true)
-      .withCaptureNt(true)
-      .withLogExtras(true)
-      .withLogExtras(true)
-      .withCaptureDs(true));
+    autoChooser = AutoBuilder.buildAutoChooser();
+    SmartDashboard.putData("Auto Chooser", autoChooser);
 
-    DogLog.setPdh(drivetrain.PDP);
-
-    DogLog.setEnabled(true);
-
+    drivetrain.setDefaultCommand(
+      drivetrain.drive(
+        () -> Constants.MaxVelocity.times(controller.getLeftX()),
+        () -> Constants.MaxVelocity.times(controller.getLeftY()),
+        () -> Constants.MaxOmega.times(controller.getRightX())
+      )
+    );
 
     configureBindings();
   }
 
-  private void configureBindings() {}
+	private void configureBindings() {}
 
-  public Command getAutonomousCommand() {
-    return Commands.print("No autonomous command configured");
-  }
+	public Command getAutonomousCommand() {
+		try {
+      return autoChooser.getSelected();
+		}
+		catch(Exception e) {
+			return Commands.print("No autonomous command configured");
+		}
+	}
 }
