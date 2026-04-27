@@ -22,6 +22,7 @@ public class Constants {
     
     public static final Distance TrackWidth = Inches.of(21.918500);
     public static final Distance WheelRadius = Inches.of(3);
+    public static final Distance WheelCircumference = WheelRadius.times(2 * Math.PI);
 
     public static final double PositionConversionFactor = 1 / GearRatio;
     public static final double VelocityConversionFactor = PositionConversionFactor / 60;

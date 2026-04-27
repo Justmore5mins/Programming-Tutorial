@@ -9,9 +9,9 @@ import edu.wpi.first.networktables.DoublePublisher;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.networktables.StructPublisher;
 import edu.wpi.first.wpilibj.RobotController;
-import edu.wpi.first.wpilibj2.command.Subsystem;
+import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
-public class DataLog implements Subsystem{
+public class DataLog extends SubsystemBase {
     private Drivetrain drivetrain = Drivetrain.getInstance();
 
     private StructPublisher<Pose2d> CurrentPose = NetworkTableInstance.getDefault().getStructTopic("Drivetrain/CurrentPose", Pose2d.struct).publish();
@@ -23,7 +23,7 @@ public class DataLog implements Subsystem{
     private BooleanPublisher RSLState = NetworkTableInstance.getDefault().getBooleanTopic("System/RSLState").publish();
     @Override
     public void periodic(){
-        CurrentPose.accept(drivetrain.PoseEstimator.getEstimatedPosition());
+        CurrentPose.accept(drivetrain.getCurrentPose());
         CurrentSpeeds.accept(Constants.kinematics.toChassisSpeeds(drivetrain.getSpeeds()));
         CurrentWheelSpeeds.accept(drivetrain.getSpeeds());
         CurrentPosition.accept(drivetrain.getPosition());
