@@ -86,7 +86,6 @@ public class Drivetrain implements Subsystem {
         RightPID = motors.get(2).getClosedLoopController();
 
         gyro = new AHRS(NavXComType.kMXP_SPI);
-        PoseEstimator = new DifferentialDrivePoseEstimator(Constants.kinematics, gyro.getRotation2d(), getPosition().leftMeters, getPosition().rightMeters, new Pose2d());
 
         PDP = new PowerDistribution(50, ModuleType.kCTRE);
 
