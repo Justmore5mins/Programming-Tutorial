@@ -6,7 +6,6 @@ import static edu.wpi.first.units.Units.MetersPerSecond;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.config.RobotConfig;
@@ -86,8 +85,6 @@ public class Drivetrain implements Subsystem {
         RightPID = motors.get(2).getClosedLoopController();
 
         gyro = new AHRS(NavXComType.kMXP_SPI);
-        PoseEstimator = new DifferentialDrivePoseEstimator(Constants.kinematics, gyro.getRotation2d(), getPosition().leftMeters, getPosition().rightMeters, new Pose2d());
-
         PDP = new PowerDistribution(50, ModuleType.kCTRE);
 
         FrontLeftConfig = new SparkMaxConfig();
@@ -129,30 +126,24 @@ public class Drivetrain implements Subsystem {
         autoInit();
     }
 
-    public DifferentialDriveWheelPositions getPosition(){
-        // if(RobotBase.isReal()) {
-        //     return new DifferentialDriveWheelPositions(
-        //         Meters.of(encoders.get(0).getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters)),
-        //         Meters.of(encoders.get(2).getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
-        //     );
-        // }
-        // else {
-        //     return new DifferentialDriveWheelPositions(
-        //         Meters.of(leftSimEncoder.getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters)),
-        //         Meters.of(rightSimEncoder.getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
-        //     );
-        // }
+    public DifferentialDriveWheelPositions getPosition() {
+        double leftPosition = RobotBase.isReal() ? encoders.get(0).getPosition() : LeftEncoderSim.getPosition();
+        double rightPosition = RobotBase.isReal() ? encoders.get(2).getPosition() : RightEncoderSim.getPosition();
+        
         return new DifferentialDriveWheelPositions(
-            Meters.of((RobotBase.isReal() ? encoders.get(0).getPosition() : LeftEncoderSim.getPosition()) * Constants.WheelRadius.times(2 * Math.PI).in(Meters)), 
-            Meters.of((RobotBase.isReal() ? encoders.get(2).getPosition() : RightEncoderSim.getPosition()) * Constants.WheelRadius.times(2 * Math.PI).in(Meters)));
+            Meters.of(leftPosition * Constants.WheelRadius.times(2 * Math.PI).in(Meters)), 
+            Meters.of(rightPosition * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
+        );
     }
 
-    public DifferentialDriveWheelSpeeds getSpeeds(){
-        return new DifferentialDriveWheelSpeeds(
-            MetersPerSecond.of((RobotBase.isReal() ? encoders.get(0).getVelocity() : LeftEncoderSim.getVelocity()) * Constants.WheelCircumference.in(Meters)),
-            MetersPerSecond.of((RobotBase.isReal() ? encoders.get(2).getVelocity() : RightEncoderSim.getVelocity()) * Constants.WheelCircumference.in(Meters))
-        );
+    public DifferentialDriveWheelSpeeds getSpeeds() {
+        double leftVelocity = RobotBase.isReal() ? encoders.get(0).getVelocity() : LeftEncoderSim.getVelocity();
+        double rightVelocity = RobotBase.isReal() ? encoders.get(2).getVelocity() : RightEncoderSim.getVelocity();
 
+        return new DifferentialDriveWheelSpeeds(
+            MetersPerSecond.of(leftVelocity * Constants.WheelCircumference.in(Meters)),
+            MetersPerSecond.of(rightVelocity * Constants.WheelCircumference.in(Meters))
+        );
     }
 
     public Pose2d getCurrentPose() {
@@ -182,18 +173,18 @@ public class Drivetrain implements Subsystem {
         }
     }
 
-    public void resetPose(Pose2d pose){
+    public void resetPose(Pose2d pose) {
             PoseEstimator.resetPose(pose);
     }
 
 
     @Override
-    public void periodic(){
+    public void periodic() {
         PoseEstimator.update(gyro.getRotation2d(), getPosition());
         log();
     }
 
-    private void log(){
+    private void log() {
         DogLog.log("Drivetrain/CurrentPose", PoseEstimator.getEstimatedPosition());
         DogLog.log("Drivetrain/CurrentSpeeds", Constants.kinematics.toChassisSpeeds(getSpeeds()));
         DogLog.log("Drivetrain/WheelSpeeds", getSpeeds());
@@ -219,24 +210,26 @@ public class Drivetrain implements Subsystem {
         gyro.setAngleAdjustment(-driveSim.getHeading().getDegrees());
     }
 
-    private void autoInit(){
-        try{
+    private void autoInit() {
+        try {
             AutoBuilder.configure(
-            () -> PoseEstimator.getEstimatedPosition(), 
-            this::resetPose, 
-            () -> Constants.kinematics.toChassisSpeeds(getSpeeds()), 
-            (speeds, ff) -> drive(speeds), 
-            new PPLTVController(
-                VecBuilder.fill(1.0,1.0,1.0), 
-                VecBuilder.fill(1.0,1.0),
-                0.02
-            ), 
-            RobotConfig.fromGUISettings(), 
-            () -> DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Red, 
-            this); 
-       }catch(Exception e){
-        DriverStation.reportError(e.getMessage(), e.getStackTrace());
-       }
+                () -> PoseEstimator.getEstimatedPosition(), 
+                this::resetPose, 
+                () -> Constants.kinematics.toChassisSpeeds(getSpeeds()), 
+                (speeds, ff) -> drive(speeds), 
+                new PPLTVController(
+                    VecBuilder.fill(1.0,1.0,1.0), 
+                    VecBuilder.fill(1.0,1.0),
+                    0.02
+                ), 
+                RobotConfig.fromGUISettings(), 
+                () -> DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Red, 
+                this
+            ); 
+        } 
+        catch(Exception e) {
+            DriverStation.reportError(e.getMessage(), e.getStackTrace());
+        }
     }
 
     private void simInit() {
@@ -260,7 +253,7 @@ public class Drivetrain implements Subsystem {
         rightSimMotor.useDriverStationEnable();
     }
 
-    public static Drivetrain getInstance(){
+    public static Drivetrain getInstance() {
         inst = inst == null ? new Drivetrain() : inst;
         return inst;
     }
