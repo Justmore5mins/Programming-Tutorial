@@ -129,18 +129,6 @@ public class Drivetrain implements Subsystem {
     }
 
     public DifferentialDriveWheelPositions getPosition(){
-        // if(RobotBase.isReal()) {
-        //     return new DifferentialDriveWheelPositions(
-        //         Meters.of(encoders.get(0).getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters)),
-        //         Meters.of(encoders.get(2).getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
-        //     );
-        // }
-        // else {
-        //     return new DifferentialDriveWheelPositions(
-        //         Meters.of(leftSimEncoder.getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters)),
-        //         Meters.of(rightSimEncoder.getPosition() * Constants.WheelRadius.times(2 * Math.PI).in(Meters))
-        //     );
-        // }
         return new DifferentialDriveWheelPositions(
             Meters.of((RobotBase.isReal() ? encoders.get(0).getPosition() : LeftEncoderSim.getPosition()) * Constants.WheelRadius.times(2 * Math.PI).in(Meters)), 
             Meters.of((RobotBase.isReal() ? encoders.get(2).getPosition() : RightEncoderSim.getPosition()) * Constants.WheelRadius.times(2 * Math.PI).in(Meters)));
